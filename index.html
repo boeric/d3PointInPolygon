@@ -93,6 +93,7 @@
 'use strict';
 var margin = {top: 50, right: 50, bottom: 50, left: 50};
 
+// polygon vertices
 var verticies = [ 
 	{ x: 84, y: 45 },
   { x: 205, y: 45 },
@@ -159,7 +160,7 @@ var bBox = (function() {
 console.log("bBox", bBox);
 
 // determine initial location of test point
-var point = {x: bBox.midX, y: bBox.midY};
+var point = {x: ~~bBox.midX, y: ~~bBox.midY};
 var endPoint;
 
 // source: http://stackoverflow.com/questions/9043805/test-if-two-lines-intersect-javascript-function (10)
@@ -177,6 +178,7 @@ function isIntersect(p1, p2, p3, p4) {
   return (CCW(p1, p3, p4) != CCW(p2, p3, p4)) && (CCW(p1, p2, p3) != CCW(p1, p2, p4));
 }
 
+// create array of polygon segments
 var segments = verticies.map(function(d, i, a) {
 	var p1 = a[i];
 	var p2 = (i == a.length - 1) ? a[0] : a[i + 1];
@@ -226,10 +228,6 @@ svg.selectAll("line")
 		.attr("x2", function(d) { return d[1].x })
 		.attr("y2", function(d) { return d[1].y })
 		.attr("id", function(d, i) { return "Segm-" + i })
-		.on("mouseover", function() {
-			var item = d3.select(this);
-			//console.log("item", item)
-		})
 
 // draw circles at each vertex
 svg.selectAll("circle")
@@ -256,8 +254,7 @@ var svgPoint = svg.append("circle")
 		.attr("r", 6)
 		.call(drag);
 
-
-// update the test point (called from drag handler and at init)
+// update the test point (called from drag and select handlers, at init)
 var rayClamp = "auto";
 function updatePoint(newPoint) {
 	// clamp point to svg dimensions minus 10px (so it doesn't disappear)
@@ -276,7 +273,6 @@ function updatePoint(newPoint) {
 	var horiz = point.x < bBox.midX ? bBox.lr.x + 30 : bBox.ul.x - 30;
 	var vert  = point.y < bBox.midY ? bBox.lr.y + 30 : bBox.ul.y - 30;
 	if (rayClamp != "auto") {
-			console.log(bBox[rayClamp].x)
 			horiz = (bBox[rayClamp].x < bBox.midX) ? -30 : bBox[rayClamp].x + 30;
 			vert  = (bBox[rayClamp].y < bBox.midY) ? -30 : bBox[rayClamp].y + 30;
 	}
@@ -297,7 +293,6 @@ function updatePoint(newPoint) {
 	var count = 0;
 	segments.forEach(function(d, i) {
 		var intersect = isIntersect(d[0], d[1], point, endPoint);
-		//console.log(i, intersect)
 		if (intersect) {
 			count++;
 			d3.select("#Segm-" + i).classed("intersected", true)
@@ -313,7 +308,6 @@ function updatePoint(newPoint) {
 	d3.select("#inPolygonLabel").text(inPolygon ? "Test point is in the polygon" : "Test point is Not in the polygon")
 	d3.select("#pointPosLabel").text("Point position: " + point.x + ", " + point.y)
 	d3.select("#segmentCountLabel").text(count + ((count <= 1) ? " segment is" : " segments are") + " intersected")
-
 }
 
 // initial update to draw ray
