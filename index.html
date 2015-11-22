@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Point in Polygon</title>
+<!-- Author: Bo Ericsson, bo@boe.net -->
+<link rel=stylesheet type=text/css href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/2.3.2/css/bootstrap.min.css" media="all">
+<!--<link rel=stylesheet type=text/css href="../_lib/bootstrap.min.css" media="all">-->
+<style>
+	body {
+		margin: 10px;
+		font-size: 12px;
+	}
+	svg {
+		background-color: #fafafa;
+		border: 1px solid lightgray;
+	}
+	path {
+		stroke: gray;
+		fill: steelblue;
+		opacity: 0.5;
+	}
+	.vertex {
+		fill: black;
+		stroke: none;
+	}
+	.point {
+		fill: green;
+		fill-opacity: 0.5;
+		stroke: none;
+	}
+	.point.inPolygon {
+		fill: red;
+		fill-opacity: 0.5;
+		stroke: none;
+	}
+	.point:hover {
+		cursor: crosshair;
+	}
+	rect {
+		fill: none;
+		stroke: lightgray;
+	}
+	.segment {
+		stroke: gray;
+		stroke-width: 2px;
+	}
+	.segment.intersected {
+		stroke: red;
+		stroke-width: 4px;
+	}
+	.segment:hover {
+		stroke: green;
+		stroke-width: 3px;
+	}
+	.ray {
+		stroke: lightgray;
+		stroke-width: 1px;
+	}
+	.ray:hover {
+		stroke: lightgray;
+		stroke-width: 1px;		
+	}
+	div {
+		display: inline-block;
+		vertical-align: top;
+		margin-right: 10px;
+	}
+	select {
+		font-size: 12px;
+	}
+</style>
+<body>
+
+<div id="container"></div>
+<div id="status">
+	<label id="inPolygonLabel"></label>
+	<label id="pointPosLabel"></label>
+	<label id="segmentCountLabel"></label>
+	<label style="margin-top: 20px">Ray Endpoint:</label>
+	<select>
+		<option value="auto" selected>Auto</option>
+		<option value="ul">Clamp to upper left corner</option>
+		<option value="ur">Clamp to upper right corner</option>
+		<option value="lr">Clamp to lower right corner</option>
+		<option value="ll">Clamp to lower left corner</option>
+	</select>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.6/d3.min.js"></script>
+<!--<script src="../_lib/d3.min.js"></script>-->
+<script>
+'use strict';
+var margin = {top: 50, right: 50, bottom: 50, left: 50};
+
+var verticies = [ 
+	{ x: 84, y: 45 },
+  { x: 205, y: 45 },
+  { x: 256, y: 91 },
+  { x: 260, y: 158 },
+  { x: 231, y: 163 },
+  { x: 219, y: 116 },
+  { x: 213, y: 88 },
+  { x: 200, y: 74 },
+  { x: 164, y: 97 },
+  { x: 180, y: 165 },
+  { x: 170, y: 218 },
+  { x: 174, y: 275 },
+  { x: 87, y: 209 },
+  { x: 120, y: 154 },
+  { x: 79, y: 114 },
+  { x: 30, y: 147 },
+  { x: 33, y: 247 },
+  { x: 135, y: 332 },
+  { x: 282, y: 293 },
+  { x: 238, y: 180 },
+  { x: 320, y: 153 },
+  { x: 324, y: 57 },
+  { x: 275, y: 23 },
+  { x: 221, y: 7 },
+  { x: 155, y: 1 },
+  { x: 105, y: 4 },
+  { x: 37, y: 7 },
+  { x: 1, y: 87 },
+  { x: 25, y: 117 },
+  { x: 72, y: 71 },
+  { x: 142, y: 141 },
+  { x: 150, y: 90 },
+  { x: 186, y: 63 },
+  { x: 131, y: 63 },
+  { x: 84, y: 45 }
+]
+console.log("verticies", verticies)
+
+// calculate the bounding box
+var bBox = (function() {
+	var maxX = Number.MIN_VALUE;
+	var maxY = Number.MIN_VALUE;
+	var minX = Number.MAX_VALUE;
+	var minY = Number.MAX_VALUE;
+
+	verticies.forEach(function(d) {
+		if (d.x > maxX) maxX = d.x;
+		if (d.y > maxY) maxY = d.y;
+		if (d.x < minX) minX = d.x;
+		if (d.y < minY) minY = d.y;		
+	})
+	return {
+		ul: {x: minX, y: minY}, 
+		ur: {x: maxX, y: minY}, 
+		lr: {x: maxX, y: maxY}, 
+		ll: {x: minX, y: maxY},
+		width: maxX - minX,
+		height: maxY - minY,
+		midX: (maxX - minX) / 2,
+		midY: (maxY - minY) / 2
+	};
+})();
+console.log("bBox", bBox);
+
+// determine initial location of test point
+var point = {x: bBox.midX, y: bBox.midY};
+var endPoint;
+
+// source: http://stackoverflow.com/questions/9043805/test-if-two-lines-intersect-javascript-function (10)
+function CCW(p1, p2, p3) {
+  var a = p1.x; 
+  var b = p1.y; 
+  var c = p2.x; 
+  var d = p2.y;
+  var e = p3.x; 
+  var f = p3.y;
+  return (f - b) * (c - a) > (d - b) * (e - a);
+}
+
+function isIntersect(p1, p2, p3, p4) {
+  return (CCW(p1, p3, p4) != CCW(p2, p3, p4)) && (CCW(p1, p2, p3) != CCW(p1, p2, p4));
+}
+
+var segments = verticies.map(function(d, i, a) {
+	var p1 = a[i];
+	var p2 = (i == a.length - 1) ? a[0] : a[i + 1];
+	return [p1, p2];
+})
+console.log("segments", segments);
+
+// define drag behavior (to move point)
+var drag = d3.behavior.drag() 
+		.on("drag", function(d, i) { updatePoint({x: d3.event.x, y: d3.event.y}) })
+
+// define line function to draw path from verticies
+var lineFn = d3.svg.line()
+			.x(function(d) { return d.x })
+			.y(function(d) { return d.y })
+			.interpolate("linear");
+
+// calculate svg size (based on margin and bounding box)
+var svgWidth = margin.left + margin.right + bBox.lr.x - bBox.ul.x;
+var svgHeight = margin.top + margin.bottom + bBox.lr.y - bBox.ul.y;
+
+// create the svg element
+var svg = d3.select("#container").append("svg")
+			.attr("width", svgWidth)
+			.attr("height", svgHeight)
+		.append("g")
+			.attr("transform", "translate(" + margin.left + ", " + margin.top + ")");
+
+// append the bounding box
+svg.append("rect")
+		.attr("x", bBox.ul.x)
+		.attr("y", bBox.ul.y)
+		.attr("width", bBox.lr.x - bBox.ul.x)
+		.attr("height", bBox.lr.y - bBox.ul.y)
+
+// append the polygon
+svg.append("path")
+		.attr("d", lineFn(verticies))
+
+// on top of polygon, draw each line segment
+svg.selectAll("line")
+		.data(segments)
+	.enter().append("line")
+		.attr("class", "segment")
+		.attr("x1", function(d) { return d[0].x })
+		.attr("y1", function(d) { return d[0].y })
+		.attr("x2", function(d) { return d[1].x })
+		.attr("y2", function(d) { return d[1].y })
+		.attr("id", function(d, i) { return "Segm-" + i })
+		.on("mouseover", function() {
+			var item = d3.select(this);
+			//console.log("item", item)
+		})
+
+// draw circles at each vertex
+svg.selectAll("circle")
+		.data(verticies)
+	.enter().append("circle")
+		.attr("class", "vertex")
+		.attr("cx", function(d) { return d.x })
+		.attr("cy", function(d) { return d.y })
+		.attr("r", 2)
+
+// draw the ray emanating from the test point (initially zero length)
+var svgRay = svg.append("line")
+		.attr("class", "ray")
+		.attr("x1", point.x)
+		.attr("y1", point.y)
+		.attr("x2", point.x)
+		.attr("y2", point.y);
+
+// draw the movable test point
+var svgPoint = svg.append("circle")
+		.attr("class", "point")
+		.attr("cx", point.x)
+		.attr("cy", point.y)
+		.attr("r", 6)
+		.call(drag);
+
+
+// update the test point (called from drag handler and at init)
+var rayClamp = "auto";
+function updatePoint(newPoint) {
+	// clamp point to svg dimensions minus 10px (so it doesn't disappear)
+	if (newPoint.x < 10 - margin.left) newPoint.x = 10 - margin.left;
+	if (newPoint.y < 10 - margin.top) newPoint.y = 10 - margin.top;
+	if (newPoint.x > svgWidth - 10 - margin.right) newPoint.x = svgWidth - 10 - margin.right;
+	if (newPoint.y > svgHeight - 10 - margin.bottom) newPoint.y = svgHeight - 10 - margin.bottom;
+	
+	// assign to point
+	point = newPoint;
+	
+	// move the point
+	svgPoint.attr("cx", point.x).attr("cy", point.y);
+
+	// determine quadrant to set ray's end point
+	var horiz = point.x < bBox.midX ? bBox.lr.x + 30 : bBox.ul.x - 30;
+	var vert  = point.y < bBox.midY ? bBox.lr.y + 30 : bBox.ul.y - 30;
+	if (rayClamp != "auto") {
+			console.log(bBox[rayClamp].x)
+			horiz = (bBox[rayClamp].x < bBox.midX) ? -30 : bBox[rayClamp].x + 30;
+			vert  = (bBox[rayClamp].y < bBox.midY) ? -30 : bBox[rayClamp].y + 30;
+	}
+	// set ray's end point
+	endPoint = {x: horiz, y: vert}
+
+	// update ray
+	svgRay
+			.attr("x1", point.x)
+			.attr("y1", point.y)
+			.attr("x2", endPoint.x)
+			.attr("y2", endPoint.y)
+	
+	// remove intersected class from all segments
+	d3.selectAll(".segment").classed("intersected", false);
+
+	// process each segment to test for intersection
+	var count = 0;
+	segments.forEach(function(d, i) {
+		var intersect = isIntersect(d[0], d[1], point, endPoint);
+		//console.log(i, intersect)
+		if (intersect) {
+			count++;
+			d3.select("#Segm-" + i).classed("intersected", true)
+		}
+	})
+
+	// if count is even, test point is outside polygon
+	var inPolygon = (count % 2) ? true : false;
+	if (inPolygon) svgPoint.classed("inPolygon", true)
+	else svgPoint.classed("inPolygon", false);
+
+	// update labels
+	d3.select("#inPolygonLabel").text(inPolygon ? "Test point is in the polygon" : "Test point is Not in the polygon")
+	d3.select("#pointPosLabel").text("Point position: " + point.x + ", " + point.y)
+	d3.select("#segmentCountLabel").text(count + ((count <= 1) ? " segment is" : " segments are") + " intersected")
+
+}
+
+// initial update to draw ray
+updatePoint(point);
+
+// handler for select (allows the ray's endpoint to be clamped)
+d3.select("select").on("change", function() {
+	this.blur();
+	var item = d3.select(this);
+	var value = item.property("value");
+	rayClamp = value;
+	updatePoint(point);
+})
+
+</script>
