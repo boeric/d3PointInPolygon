@@ -69,11 +69,16 @@
 	select {
 		font-size: 12px;
 	}
+	#status > label:first-child {
+		color: red;
+		margin-bottom: 10px;
+	}
 </style>
 <body>
 
 <div id="container"></div>
 <div id="status">
+	<label>Drag the green circle around!</label>
 	<label id="inPolygonLabel"></label>
 	<label id="pointPosLabel"></label>
 	<label id="segmentCountLabel"></label>
@@ -305,8 +310,8 @@ function updatePoint(newPoint) {
 	else svgPoint.classed("inPolygon", false);
 
 	// update labels
-	d3.select("#inPolygonLabel").text(inPolygon ? "Test point is in the polygon" : "Test point is Not in the polygon")
-	d3.select("#pointPosLabel").text("Point position: " + point.x + ", " + point.y)
+	d3.select("#inPolygonLabel").html(inPolygon ? "Test point is <b>In</b> the polygon" : "Test point is <b>Not</b> in the polygon")
+	d3.select("#pointPosLabel").html("Point position: " + point.x + ", " + point.y)
 	d3.select("#segmentCountLabel").text(count + ((count <= 1) ? " segment is" : " segments are") + " intersected")
 }
 
